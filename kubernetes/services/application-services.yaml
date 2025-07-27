@@ -1,0 +1,103 @@
+# Application Services - Complete service definitions for all microservices
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: options-calculator-service
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: options-calculator
+    app.kubernetes.io/component: calculator
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8085
+    targetPort: 8085
+    name: http
+  selector:
+    app.kubernetes.io/name: options-calculator
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: delta-monitor-service
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: delta-monitor
+    app.kubernetes.io/component: monitoring
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8086
+    targetPort: 8086
+    name: http
+  selector:
+    app.kubernetes.io/name: delta-monitor
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: notification-service
+    app.kubernetes.io/component: notifications
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8087
+    targetPort: 8087
+    name: http
+  selector:
+    app.kubernetes.io/name: notification-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-service
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: portfolio-service
+    app.kubernetes.io/component: portfolio
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8083
+    targetPort: 8083
+    name: http
+  selector:
+    app.kubernetes.io/name: portfolio-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reporting-service
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: reporting-service
+    app.kubernetes.io/component: reports
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8088
+    targetPort: 8088
+    name: http
+  selector:
+    app.kubernetes.io/name: reporting-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tastytrade-integration-service
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: tastytrade-integration
+    app.kubernetes.io/component: integration
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8081
+    targetPort: 8081
+    name: http
+  selector:
+    app.kubernetes.io/name: tastytrade-integration

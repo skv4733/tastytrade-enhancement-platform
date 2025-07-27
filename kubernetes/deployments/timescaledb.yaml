@@ -1,0 +1,185 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: timescaledb
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: timescaledb
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: tastytrade-platform
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: timescaledb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: timescaledb
+        app.kubernetes.io/component: database
+    spec:
+      containers:
+      - name: timescaledb
+        image: timescale/timescaledb:latest-pg15
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DB_PASSWORD
+        - name: POSTGRES_INITDB_ARGS
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_INITDB_ARGS
+        command:
+        - postgres
+        - -c
+        - shared_preload_libraries=timescaledb
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - tastytrade
+            - -d
+            - tastytrade
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - tastytrade
+            - -d
+            - tastytrade
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      - name: init-scripts
+        configMap:
+          name: postgres-init-scripts
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: timescaledb
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: fast-ssd
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: timescaledb
+    app.kubernetes.io/component: initialization
+data:
+  init.sql: |
+    -- Initialize TimescaleDB extension
+    CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
+    -- Create schemas
+    CREATE SCHEMA IF NOT EXISTS trading;
+    CREATE SCHEMA IF NOT EXISTS audit;
+    CREATE SCHEMA IF NOT EXISTS monitoring;
+
+    -- Grant permissions
+    GRANT ALL PRIVILEGES ON SCHEMA trading TO tastytrade;
+    GRANT ALL PRIVILEGES ON SCHEMA audit TO tastytrade;
+    GRANT ALL PRIVILEGES ON SCHEMA monitoring TO tastytrade;
+
+    -- Create market data hypertable for time-series data
+    CREATE TABLE IF NOT EXISTS trading.market_data (
+        time TIMESTAMPTZ NOT NULL,
+        symbol VARCHAR(20) NOT NULL,
+        price DECIMAL(19,4),
+        volume BIGINT,
+        bid_price DECIMAL(19,4),
+        ask_price DECIMAL(19,4),
+        bid_size INTEGER,
+        ask_size INTEGER,
+        underlying_price DECIMAL(19,4),
+        implied_volatility DECIMAL(10,6),
+        delta DECIMAL(10,6),
+        gamma DECIMAL(10,6),
+        theta DECIMAL(10,6),
+        vega DECIMAL(10,6),
+        rho DECIMAL(10,6),
+        open_interest INTEGER,
+        strike_price DECIMAL(19,4),
+        expiration_date DATE,
+        option_type VARCHAR(4)
+    );
+
+    -- Convert to hypertable
+    SELECT create_hypertable('trading.market_data', 'time', if_not_exists => TRUE);
+
+    -- Create indexes for better query performance
+    CREATE INDEX IF NOT EXISTS idx_market_data_symbol_time ON trading.market_data (symbol, time DESC);
+    CREATE INDEX IF NOT EXISTS idx_market_data_underlying ON trading.market_data (underlying_price, time DESC) WHERE underlying_price IS NOT NULL;
+
+    -- Create delta monitoring table
+    CREATE TABLE IF NOT EXISTS monitoring.delta_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        symbol VARCHAR(20) NOT NULL,
+        account_number VARCHAR(50) NOT NULL,
+        current_delta DECIMAL(10,6),
+        threshold_delta DECIMAL(10,6),
+        breach_type VARCHAR(20),
+        alert_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        resolved BOOLEAN DEFAULT FALSE,
+        resolved_time TIMESTAMPTZ
+    );
+
+    -- Convert to hypertable
+    SELECT create_hypertable('monitoring.delta_alerts', 'alert_time', if_not_exists => TRUE);
+
+    -- Create compression policy (compress data older than 7 days)
+    SELECT add_compression_policy('trading.market_data', INTERVAL '7 days', if_not_exists => TRUE);
+    SELECT add_compression_policy('monitoring.delta_alerts', INTERVAL '30 days', if_not_exists => TRUE);
+
+    -- Create retention policy (delete data older than 2 years for market data)
+    SELECT add_retention_policy('trading.market_data', INTERVAL '2 years', if_not_exists => TRUE);
+    SELECT add_retention_policy('monitoring.delta_alerts', INTERVAL '5 years', if_not_exists => TRUE);

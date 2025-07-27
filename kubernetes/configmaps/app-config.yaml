@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: tastytrade-platform
+    app.kubernetes.io/component: configuration
+data:
+  # Database Configuration
+  POSTGRES_HOST: "timescaledb-service"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "tastytrade"
+  
+  # Redis Configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  
+  # RabbitMQ Configuration
+  RABBITMQ_HOST: "rabbitmq-service"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_MANAGEMENT_PORT: "15672"
+  RABBITMQ_VHOST: "/"
+  
+  # JWT Configuration
+  JWT_EXPIRATION_MS: "86400000"
+  JWT_REFRESH_EXPIRATION_MS: "604800000"
+  
+  # Service Ports
+  API_GATEWAY_PORT: "8080"
+  USER_SERVICE_PORT: "8084"
+  TASTYTRADE_INTEGRATION_PORT: "8081"
+  MARKET_DATA_SERVICE_PORT: "8082"
+  OPTIONS_CALCULATOR_PORT: "8085"
+  DELTA_MONITOR_PORT: "8086"
+  NOTIFICATION_SERVICE_PORT: "8087"
+  PORTFOLIO_SERVICE_PORT: "8083"
+  REPORTING_SERVICE_PORT: "8088"
+  
+  # Logging Configuration
+  LOGGING_LEVEL_ROOT: "INFO"
+  LOGGING_LEVEL_TASTYTRADE: "DEBUG"
+  
+  # Actuator Configuration
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,metrics,prometheus"
+  
+  # Caching Configuration
+  CACHE_DEFAULT_TTL: "300"
+  CACHE_QUOTES_TTL: "60"
+  
+  # Rate Limiting
+  RATE_LIMIT_DEFAULT: "100"
+  RATE_LIMIT_MARKET_DATA: "1000"
+  
+  # Delta Monitoring
+  DELTA_DEFAULT_THRESHOLD: "0.1"
+  DELTA_ALERT_COOLDOWN_SECONDS: "300"
+  
+  # External API Configuration
+  TASTYTRADE_API_BASE_URL: "https://api.tastytrade.com"
+  POLYGON_API_BASE_URL: "https://api.polygon.io"
+  
+  # Feature Flags
+  FEATURE_ADAPTIVE_THRESHOLDS: "true"
+  FEATURE_REAL_TIME_ALERTS: "true"
+  FEATURE_PORTFOLIO_ANALYTICS: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: timescaledb
+    app.kubernetes.io/component: database
+data:
+  POSTGRES_DB: "tastytrade"
+  POSTGRES_USER: "tastytrade"
+  POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+  shared_preload_libraries: "timescaledb"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: message-broker
+data:
+  RABBITMQ_DEFAULT_USER: "tastytrade"
+  RABBITMQ_DEFAULT_VHOST: "/"
+  enabled_plugins: |
+    [rabbitmq_management,rabbitmq_prometheus,rabbitmq_shovel,rabbitmq_stomp].
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: nginx
+    app.kubernetes.io/component: ingress
+data:
+  nginx.conf: |
+    upstream api_gateway {
+        server api-gateway-service:8080;
+    }
+    
+    upstream market_data {
+        server market-data-service:8082;
+    }
+    
+    server {
+        listen 80;
+        server_name tastytrade.local;
+        
+        location / {
+            proxy_pass http://api_gateway;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        location /ws/ {
+            proxy_pass http://market_data;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        location /api/market-data/stream/ {
+            proxy_pass http://market_data;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_buffering off;
+            proxy_cache off;
+            chunked_transfer_encoding off;
+        }
+    }

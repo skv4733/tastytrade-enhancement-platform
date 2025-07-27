@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: message-broker
+    app.kubernetes.io/part-of: tastytrade-platform
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rabbitmq
+        app.kubernetes.io/component: message-broker
+    spec:
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:3.12-management-alpine
+        ports:
+        - containerPort: 5672
+          name: amqp
+        - containerPort: 15672
+          name: management
+        env:
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            configMapKeyRef:
+              name: rabbitmq-config
+              key: RABBITMQ_DEFAULT_USER
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: RABBITMQ_PASSWORD
+        - name: RABBITMQ_DEFAULT_VHOST
+          valueFrom:
+            configMapKeyRef:
+              name: rabbitmq-config
+              key: RABBITMQ_DEFAULT_VHOST
+        volumeMounts:
+        - name: rabbitmq-storage
+          mountPath: /var/lib/rabbitmq
+        - name: rabbitmq-config
+          mountPath: /etc/rabbitmq/enabled_plugins
+          subPath: enabled_plugins
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - -q
+            - ping
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - -q
+            - check_port_connectivity
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: rabbitmq-storage
+        persistentVolumeClaim:
+          claimName: rabbitmq-pvc
+      - name: rabbitmq-config
+        configMap:
+          name: rabbitmq-config
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rabbitmq-pvc
+  namespace: tastytrade
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: fast-ssd

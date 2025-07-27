@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tastytrade
+  labels:
+    name: tastytrade
+    environment: production
+    app.kubernetes.io/name: tastytrade-platform
+    app.kubernetes.io/version: "1.0.0"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tastytrade-staging
+  labels:
+    name: tastytrade-staging
+    environment: staging
+    app.kubernetes.io/name: tastytrade-platform
+    app.kubernetes.io/version: "1.0.0"
