@@ -1,0 +1,13 @@
+/services/api-gateway/target/
+/services/tastytrade-integration/target/
+# Default ignored files
+/shelf/
+/workspace.xml
+/compiler.xml
+/jarRepositories.xml
+/misc.xml
+/vcs.xml
+
+/services/api-gateway/target/
+**/target/**
+
