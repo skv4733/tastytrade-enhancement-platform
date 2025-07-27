@@ -1,0 +1,18 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: tastytrade-integration
+
+tastytrade:
+  api:
+    base-url: https://api.tastytrade.com
+    client-id: ${TASTYTRADE_CLIENT_ID:your-client-id}
+    client-secret: ${TASTYTRADE_CLIENT_SECRET:your-client-secret}
+    redirect-uri: http://localhost:8081/login/oauth2/code/tastytrade
+
+logging:
+  level:
+    com.tastytrade: DEBUG
+    org.springframework.web.client: DEBUG

@@ -1,0 +1,27 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: options-calculator
+  cache:
+    type: redis
+    redis:
+      host: localhost
+      port: 6379
+      database: 1
+      timeout: 2000ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.tastytrade: DEBUG
+    org.springframework.cache: DEBUG

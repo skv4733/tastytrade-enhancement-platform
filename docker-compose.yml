@@ -1,20 +1,43 @@
 version: '3.8'
 services:
-  postgres:
-    image: postgres:15
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
     environment:
       POSTGRES_DB: tastytrade
       POSTGRES_USER: tastytrade
       POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./infrastructure/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: tastytrade
+      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
 
   api-gateway:
     build: ./services/api-gateway
@@ -23,8 +46,9 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=local
     depends_on:
-      - postgres
+      - timescaledb
       - redis
+      - rabbitmq
 
   tastytrade-integration:
     build: ./services/tastytrade-integration
@@ -40,8 +64,9 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=local
     depends_on:
-      - postgres
+      - timescaledb
       - redis
+      - rabbitmq
 
   portfolio-service:
     build: ./services/portfolio-service
@@ -50,7 +75,11 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=local
     depends_on:
-      - postgres
+      - timescaledb
+      - redis
+      - rabbitmq
 
 volumes:
-  postgres_data:
+  timescaledb_data:
+  redis_data:
+  rabbitmq_data:

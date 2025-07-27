@@ -1,0 +1,51 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: delta-monitor
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tastytrade
+    username: tastytrade
+    password: password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 3
+      timeout: 2000ms
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: tastytrade
+    password: password
+    virtual-host: /
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.tastytrade: DEBUG
+    org.springframework.amqp: DEBUG
+
+delta-monitor:
+  default-threshold: 0.1
+  alert-cooldown-seconds: 300
+  adaptive-threshold-enabled: true
